@@ -5,7 +5,7 @@ describe('API tests', () => {
   test('GET / returns hello message', async () => {
     const res = await request(app).get('/');
     expect(res.statusCode).toBe(200);
-    expect(res.body.message).toContain('Hello');
+    expect(res.body.message).toContain('Nameshte');
   });
 
   test('GET /health returns OK', async () => {
