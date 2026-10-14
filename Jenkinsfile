@@ -30,7 +30,7 @@ pipeline {
         }
         stage('Deploye docker images'){
            steps {
-	      sh 'docker run -d --name $IMAGE_NAME -p 3000:3000 app'
+	      sh 'docker run -d --name app -p 3000:3000 $IMAGE_NAME:$IMAGE_TAG'
 		}
 	     }
 	   }	
