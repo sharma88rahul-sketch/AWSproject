@@ -29,7 +29,10 @@ pipeline {
             }
         }
     }
-
+        stage('Deploye docker images')
+           steps {
+	      sh 'docker run -d --name $IMAGE_NAME -p 3000:3000 app'
+		
     post {
         success {
             echo "Pipeline pass hui. Image: ${IMAGE_NAME}:${IMAGE_TAG}"
