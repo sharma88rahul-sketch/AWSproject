@@ -8,6 +8,10 @@ pipeline {
         IMAGE_NAME  = 'cicd-demo'
         IMAGE_TAG   = "${BUILD_NUMBER}"
         ECR_IMAGE   = "${ECR_REGISTRY}/${IMAGE_NAME}"
+        // ---- naye ----
+        ECS_CLUSTER  = 'cicd-demo-cluster'
+        ECS_SERVICE  = 'cicd-demo-service'
+        TASK_FAMILY  = 'cicd-demo-task'
     }
 
     stages {
@@ -47,7 +51,57 @@ pipeline {
                 }
             }
         }
+         stage('Deploy to ECS') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-ecr-creds'
+                ]]) {
+                    sh '''
+                        set -e
+
+                        # 1. Abhi ka task definition padho
+                        aws ecs describe-task-definition \
+                          --task-definition $TASK_FAMILY \
+                          --region $AWS_REGION \
+                          --query taskDefinition > current-td.json
+
+                        # 2. Sirf image badlo, aur read-only fields hata do
+                        jq --arg IMG "$ECR_IMAGE:$IMAGE_TAG" '
+                          .containerDefinitions[0].image = $IMG
+                          | del(.taskDefinitionArn, .revision, .status,
+                                .requiresAttributes, .compatibilities,
+                                .registeredAt, .registeredBy)
+                        ' current-td.json > new-td.json
+
+                        # 3. Naya revision register
+                        NEW_TD_ARN=$(aws ecs register-task-definition \
+                          --cli-input-json file://new-td.json \
+                          --region $AWS_REGION \
+                          --query taskDefinition.taskDefinitionArn \
+                          --output text)
+                        echo "Naya task definition: $NEW_TD_ARN"
+
+                        # 4. Service ko naye revision pe update karo
+                        aws ecs update-service \
+                          --cluster $ECS_CLUSTER \
+                          --service $ECS_SERVICE \
+                          --task-definition $NEW_TD_ARN \
+                          --region $AWS_REGION > /dev/null
+
+                        # 5. Rolling update khatam hone tak wait
+                        aws ecs wait services-stable \
+                          --cluster $ECS_CLUSTER \
+                          --services $ECS_SERVICE \
+                          --region $AWS_REGION
+
+                        echo "Deploy complete: $ECR_IMAGE:$IMAGE_TAG"
+                    '''
+                }
+            }
+        }
     }
+ 
 
     post {
         success {
